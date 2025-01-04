@@ -1,5 +1,5 @@
 import { AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_REDIRECT_URI, AZURE_TENANT_ID } from "$env/static/private";
-// src/lib/server/oauth.ts
+//src/lib/server/oauth.ts
 import { AuthorizationCode } from 'simple-oauth2';
 
 const clientId = AZURE_CLIENT_ID;
