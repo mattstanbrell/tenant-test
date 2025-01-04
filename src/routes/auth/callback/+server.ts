@@ -52,16 +52,23 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
     console.log('[callback/+server.ts] Decoded claims:', claims);
 
     console.log('[callback/+server.ts] Setting user cookie...');
+    const firstName = claims.given_name ?? null;
+    const lastName = claims.family_name ?? null;
+    // Some Microsoft tenants might use 'preferred_username' if 'email' is missing
+    const email = claims.email ?? claims.preferred_username ?? null;
+
+    console.log('[callback/+server.ts] Setting user cookie...');
     cookies.set(
       'user',
       JSON.stringify({
-        name: claims.name,
-        email: claims.preferred_username
+        firstName,
+        lastName,
+        email
       }),
       {
         path: '/',
-        httpOnly: false, // for demo only; true in production
-        secure: false    // set true in production (HTTPS)
+        httpOnly: false, // for local demos; set `true` in production
+        secure: false     // set to `true` if served over HTTPS
       }
     );
 
