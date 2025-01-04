@@ -11,9 +11,6 @@ if (!AZURE_CLIENT_ID || !AZURE_CLIENT_SECRET || !AZURE_TENANT_ID || !AZURE_REDIR
   throw new Error('Missing environment variables for OAuth');
 }
 
-/**
- * Return a fully-formed Microsoft OAuth authorization URL.
- */
 export function getAuthorizationUrl() {
   const params = new URLSearchParams({
     client_id: AZURE_CLIENT_ID,
@@ -23,15 +20,11 @@ export function getAuthorizationUrl() {
     response_mode: 'query'
   });
 
-  // https://login.microsoftonline.com/<tenantId>/oauth2/v2.0/authorize
   return `https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/authorize?${params.toString()}`;
 }
 
-/**
- * Exchange the given authorization code for an access token (and id_token).
- */
 export async function getAccessToken(code: string) {
-  // Prepare URL-encoded form data
+  const tokenUrl = `https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token`;
   const body = new URLSearchParams({
     client_id: AZURE_CLIENT_ID,
     client_secret: AZURE_CLIENT_SECRET,
@@ -40,20 +33,31 @@ export async function getAccessToken(code: string) {
     code
   });
 
-  // Send POST request to token endpoint
-  const tokenUrl = `https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token`;
+  console.log('[oauth.ts] Attempting token exchange at:', tokenUrl);
+  console.log('[oauth.ts] Body:', Object.fromEntries(body));
+
   const response = await fetch(tokenUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body
   });
 
-  if (!response.ok) {
+  // Log the status and headers first
+  console.log('[oauth.ts] Response status:', response.status);
+  console.log('[oauth.ts] Response headers:', Object.fromEntries(response.headers.entries()));
+
+  // If Azure sends a 302, the "Location" header or HTML body might show the reason
+  if (response.status !== 200) {
+    // Attempt to read the response text
     const errText = await response.text();
-    throw new Error(`Token request failed: ${response.status} — ${errText}`);
+    console.error('[oauth.ts] Non-OK response:', response.status, errText);
+    throw new Error(`Token request failed with status ${response.status}. Body: ${errText}`);
   }
 
-  // Return the token JSON object:
+  const tokenData = await response.json();
+  console.log('[oauth.ts] Token exchange success. Received:', tokenData);
+
+  // For reference: tokenData has shape:
   // {
   //   token_type: 'Bearer',
   //   scope: '...',
@@ -63,5 +67,6 @@ export async function getAccessToken(code: string) {
   //   id_token: '...',
   //   ...
   // }
-  return response.json();
+
+  return tokenData;
 }
