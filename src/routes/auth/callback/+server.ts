@@ -1,7 +1,6 @@
 // src/routes/auth/callback/+server.ts
-
 import { getAccessToken } from '$lib/server/oauth';
-import { json, redirect } from '@sveltejs/kit';
+import { type RequestHandler, json } from '@sveltejs/kit';
 
 /**
  * Minimal parseJwt helper:
@@ -11,7 +10,7 @@ function parseJwt(jwt: string): Record<string, any> {
   const segments = jwt.split('.');
   if (segments.length < 2) return {};
 
-  // decode the payload
+  // decode the payload (index 1)
   let base64 = segments[1].replace(/-/g, '+').replace(/_/g, '/');
   while (base64.length % 4 !== 0) {
     base64 += '=';
@@ -20,7 +19,11 @@ function parseJwt(jwt: string): Record<string, any> {
   return JSON.parse(jsonStr);
 }
 
-export const GET = async ({ url, cookies }) => {
+/**
+ * Use a standard return instead of `throw redirect()` or `return redirect()`.
+ * Cloudflare sometimes treats thrown/Kit-redirect as an unhandled error.
+ */
+export const GET: RequestHandler = async ({ url, cookies }) => {
   const code = url.searchParams.get('code');
   const error = url.searchParams.get('error');
 
@@ -38,12 +41,13 @@ export const GET = async ({ url, cookies }) => {
     const token = await getAccessToken(code);
     console.log('[callback/+server.ts] Token exchange success:', token);
 
-    console.log('[callback/+server.ts] Decoding id_token...');
     const { id_token: idToken } = token;
     if (!idToken) {
-      console.error('[callback/+server.ts] No id_token in response.');
+      console.error('[callback/+server.ts] No id_token in token response.');
       return json({ error: 'No id_token returned' }, { status: 400 });
     }
+
+    console.log('[callback/+server.ts] Decoding id_token...');
     const claims = parseJwt(idToken);
     console.log('[callback/+server.ts] Decoded claims:', claims);
 
@@ -56,16 +60,23 @@ export const GET = async ({ url, cookies }) => {
       }),
       {
         path: '/',
-        httpOnly: false,  // for demo only; set to `true` in production
-        secure: false      // set to `true` if site is served via HTTPS
+        httpOnly: false, // for demo only; true in production
+        secure: false    // set true in production (HTTPS)
       }
     );
 
-    console.log('[callback/+server.ts] User cookie set. Redirecting to /...');
-    // IMPORTANT: return the redirect, not throw
-    return redirect(302, '/');
+    console.log('[callback/+server.ts] User cookie set. Returning a 302...');
+    /**
+     * Construct a plain SvelteKit Response with a 302 status & Location header.
+     * This is often safer in Cloudflare Workers than using SvelteKit’s `redirect()`.
+     */
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: '/'
+      }
+    });
   } catch (err) {
-    // Log real errors
     console.error('[callback/+server.ts] Token exchange error:', err);
     return json({ error: 'Token exchange failed', detail: String(err) }, { status: 400 });
   }
